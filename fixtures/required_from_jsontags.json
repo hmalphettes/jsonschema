@@ -68,7 +68,11 @@
             "type": "integer"
           },
           "type": "array",
-          "description": "list of IDs, omitted when empty"
+          "description": "list of IDs, omitted when empty",
+          "default": [3,4],
+          "examples": [
+            [1,"two"]
+          ]
         },
         "grand": {
           "$schema": "http://json-schema.org/draft-04/schema#",

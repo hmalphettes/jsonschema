@@ -120,6 +120,13 @@ func (v *value) UnmarshalJSON(b []byte) error {
 }
 
 func makeValue(val string, t *Type) value {
+	if strings.HasPrefix(val, "[") && strings.HasSuffix(val, "]") {
+		vals := strings.Split(val[1:len(val)-1], ",")
+		for i, v := range vals {
+			vals[i] = string(makeValue(v, t))
+		}
+		return value("[" + strings.Join(vals, ",") + "]")
+	}
 	if t.Type == "integer" {
 		if i, err := strconv.Atoi(val); err == nil {
 			return value(fmt.Sprintf("%d", i))
@@ -326,7 +333,7 @@ func (r *Reflector) reflectStructFields(st *Type, definitions Definitions, t ref
 
 func (t *Type) structKeywordsFromTags(f reflect.StructField) {
 	t.Description = f.Tag.Get("jsonschema_description")
-	tags := strings.Split(f.Tag.Get("jsonschema"), ",")
+	tags := scanTagKVs(f.Tag.Get("jsonschema"))
 	t.genericKeywords(tags)
 	switch t.Type {
 	case "string":
@@ -343,78 +350,69 @@ func (t *Type) structKeywordsFromTags(f reflect.StructField) {
 }
 
 // read struct tags for generic keyworks
-func (t *Type) genericKeywords(tags []string) {
+func (t *Type) genericKeywords(tags []*keyValue) {
 	for _, tag := range tags {
-		nameValue := strings.Split(tag, "=")
-		if len(nameValue) == 2 {
-			name, val := nameValue[0], nameValue[1]
-			switch name {
-			case "title":
-				t.Title = val
-			case "description":
-				t.Description = val
-			}
+		name, val := tag.key, tag.value
+		switch name {
+		case "title":
+			t.Title = val
+		case "description":
+			t.Description = val
 		}
 	}
 }
 
 // read struct tags for string type keyworks
-func (t *Type) stringKeywords(tags []string) {
+func (t *Type) stringKeywords(tags []*keyValue) {
 	for _, tag := range tags {
-		nameValue := strings.Split(tag, "=")
-		if len(nameValue) == 2 {
-			name, val := nameValue[0], nameValue[1]
-			switch name {
-			case "minLength":
-				i, _ := strconv.Atoi(val)
-				t.MinLength = i
-			case "maxLength":
-				i, _ := strconv.Atoi(val)
-				t.MaxLength = i
-			case "pattern":
-				t.Pattern = val
-			case "format":
-				switch val {
-				case "date-time", "email", "hostname", "ipv4", "ipv6", "uri":
-					t.Format = val
-					break
-				}
-			case "default":
-				t.Default = makeValue(val, t)
-			case "example":
-				t.Examples = append(t.Examples, makeValue(val, t))
+		name, val := tag.key, tag.value
+		switch name {
+		case "minLength":
+			i, _ := strconv.Atoi(val)
+			t.MinLength = i
+		case "maxLength":
+			i, _ := strconv.Atoi(val)
+			t.MaxLength = i
+		case "pattern":
+			t.Pattern = val
+		case "format":
+			switch val {
+			case "date-time", "email", "hostname", "ipv4", "ipv6", "uri":
+				t.Format = val
+				break
 			}
+		case "default":
+			t.Default = makeValue(val, t)
+		case "example":
+			t.Examples = append(t.Examples, makeValue(val, t))
 		}
 	}
 }
 
 // read struct tags for numberic type keyworks
-func (t *Type) numbericKeywords(tags []string) {
+func (t *Type) numbericKeywords(tags []*keyValue) {
 	for _, tag := range tags {
-		nameValue := strings.Split(tag, "=")
-		if len(nameValue) == 2 {
-			name, val := nameValue[0], nameValue[1]
-			switch name {
-			case "multipleOf":
-				i, _ := strconv.Atoi(val)
-				t.MultipleOf = i
-			case "minimum":
-				i, _ := strconv.Atoi(val)
-				t.Minimum = i
-			case "maximum":
-				i, _ := strconv.Atoi(val)
-				t.Maximum = i
-			case "exclusiveMaximum":
-				b, _ := strconv.ParseBool(val)
-				t.ExclusiveMaximum = b
-			case "exclusiveMinimum":
-				b, _ := strconv.ParseBool(val)
-				t.ExclusiveMinimum = b
-			case "default":
-				t.Default = makeValue(val, t)
-			case "example":
-				t.Examples = append(t.Examples, makeValue(val, t))
-			}
+		name, val := tag.key, tag.value
+		switch name {
+		case "multipleOf":
+			i, _ := strconv.Atoi(val)
+			t.MultipleOf = i
+		case "minimum":
+			i, _ := strconv.Atoi(val)
+			t.Minimum = i
+		case "maximum":
+			i, _ := strconv.Atoi(val)
+			t.Maximum = i
+		case "exclusiveMaximum":
+			b, _ := strconv.ParseBool(val)
+			t.ExclusiveMaximum = b
+		case "exclusiveMinimum":
+			b, _ := strconv.ParseBool(val)
+			t.ExclusiveMinimum = b
+		case "default":
+			t.Default = makeValue(val, t)
+		case "example":
+			t.Examples = append(t.Examples, makeValue(val, t))
 		}
 	}
 }
@@ -436,53 +434,35 @@ func (t *Type) numbericKeywords(tags []string) {
 // }
 
 // read struct tags for array type keyworks
-func (t *Type) arrayKeywords(tags []string) {
-	var defaultValues []value
+func (t *Type) arrayKeywords(tags []*keyValue) {
 	for _, tag := range tags {
-		nameValue := strings.Split(tag, "=")
-		if len(nameValue) == 2 {
-			name, val := nameValue[0], nameValue[1]
-			switch name {
-			case "minItems":
-				i, _ := strconv.Atoi(val)
-				t.MinItems = i
-			case "maxItems":
-				i, _ := strconv.Atoi(val)
-				t.MaxItems = i
-			case "uniqueItems":
-				t.UniqueItems = true
-			case "default":
-				defaultValues = append(defaultValues, makeValue(val, t.Items))
-			}
+		name, val := tag.key, tag.value
+		switch name {
+		case "minItems":
+			i, _ := strconv.Atoi(val)
+			t.MinItems = i
+		case "maxItems":
+			i, _ := strconv.Atoi(val)
+			t.MaxItems = i
+		case "uniqueItems":
+			t.UniqueItems = true
+		case "default":
+			t.Default = makeValue(val, t.Items)
+		case "example":
+			t.Examples = append(t.Examples, makeValue(val, t.Items))
 		}
-	}
-	if len(defaultValues) > 0 {
-		marshalled, err := json.Marshal(defaultValues)
-		if err != nil {
-			fmt.Println("WARN: Could not marshall the array of examples", err)
-			return
-		}
-		marshalled, err = json.Marshal(marshalled)
-		if err != nil {
-			fmt.Println("WARN: Could not marshall the string of array of examples", err)
-			return
-		}
-		t.Default = value(string(marshalled))
 	}
 }
 
 // read struct tags for array type keyworks
-func (t *Type) booleanKeywords(tags []string) {
+func (t *Type) booleanKeywords(tags []*keyValue) {
 	for _, tag := range tags {
-		nameValue := strings.Split(tag, "=")
-		if len(nameValue) == 2 {
-			name, val := nameValue[0], nameValue[1]
-			switch name {
-			case "default":
-				t.Default = makeValue(val, t)
-			case "example":
-				t.Examples = append(t.Examples, makeValue(val, t))
-			}
+		name, val := tag.key, tag.value
+		switch name {
+		case "default":
+			t.Default = makeValue(val, t)
+		case "example":
+			t.Examples = append(t.Examples, makeValue(val, t))
 		}
 	}
 }

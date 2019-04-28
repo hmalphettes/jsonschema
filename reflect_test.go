@@ -53,7 +53,7 @@ type TestUser struct {
 
 	ID      int                    `json:"id" jsonschema:"required"`
 	Name    string                 `json:"name" jsonschema:"required,minLength=1,maxLength=20,pattern=.*,description=this is a property,title=the name,example=joe,example=lucy,default=alex"`
-	Friends []int                  `json:"friends,omitempty" jsonschema_description:"list of IDs, omitted when empty"`
+	Friends []int                  `json:"friends,omitempty" jsonschema_description:"list of IDs, omitted when empty" jsonschema:"example=[1,two],default=[3,4]"`
 	Tags    map[string]interface{} `json:"tags,omitempty"`
 
 	TestFlag       bool
