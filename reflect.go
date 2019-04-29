@@ -101,6 +101,9 @@ type Reflector struct {
 	// ExpandedStruct will cause the toplevel definitions of the schema not
 	// be referenced itself to a definition.
 	ExpandedStruct bool
+
+	// Number of unamed structures generated
+	anonymousCounter int
 }
 
 // Opaque value type used for Default and Examples. Carries the raw JSON value of those fields.
@@ -199,6 +202,9 @@ type protoEnum interface {
 var protoEnumType = reflect.TypeOf((*protoEnum)(nil)).Elem()
 
 func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type) *Type {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
 	// Already added to definitions?
 	if _, ok := definitions[t.Name()]; ok {
 		return &Type{Ref: "#/definitions/" + t.Name()}
@@ -288,6 +294,15 @@ func (r *Reflector) reflectTypeToSchema(definitions Definitions, t reflect.Type)
 
 // Refects a struct to a JSON Schema type.
 func (r *Reflector) reflectStruct(definitions Definitions, t reflect.Type) *Type {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	name := t.Name()
+	if t.Name() == "" {
+		name = fmt.Sprintf("anonymous%d", r.anonymousCounter)
+		r.anonymousCounter++
+		fmt.Println("OH NO")
+	}
 	st := &Type{
 		Type:                 "object",
 		Properties:           map[string]*Type{},
@@ -296,12 +311,12 @@ func (r *Reflector) reflectStruct(definitions Definitions, t reflect.Type) *Type
 	if r.AllowAdditionalProperties {
 		st.AdditionalProperties = []byte("true")
 	}
-	definitions[t.Name()] = st
+	definitions[name] = st
 	r.reflectStructFields(st, definitions, t)
 
 	return &Type{
 		Version: Version,
-		Ref:     "#/definitions/" + t.Name(),
+		Ref:     "#/definitions/" + name,
 	}
 }
 
